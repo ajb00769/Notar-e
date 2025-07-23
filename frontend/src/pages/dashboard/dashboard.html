@@ -1,0 +1,128 @@
+<div class="min-h-screen bg-gray-50 font-sans relative">
+    <app-navbar/>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <app-dashboard-greeter/>
+        <app-dashboard-quick-actions/>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div class="lg:col-span-2">
+               <app-dashboard-current-documents/>
+            </div>
+            <div>
+               <app-dashboard-blockchain-status/>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <app-dashboard-appointments/>
+            <app-dashboard-help/>
+        </div>
+    </div>
+    <app-footer/>
+    <!--
+    <div>
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display:none"
+             id="blockchainModal">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto mx-4">
+                <div class="border-b border-gray-200 px-6 py-4 flex justify-between items-center"><h3
+                        class="text-xl font-bold text-gray-900 flex items-center"><span
+                        class="material-symbols-outlined text-primary-600 mr-2">verified</span> Blockchain
+                    Verification Status </h3>
+                    <button class="text-gray-400 hover:text-gray-600 transition"><span
+                            class="material-symbols-outlined">close</span></button>
+                </div>
+                <div class="px-6 py-4">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center"><span
+                            class="material-symbols-outlined text-green-600 text-3xl mr-3">check_circle</span>
+                        <div><h4 class="font-bold text-green-800">Document Authenticity Verified</h4>
+                            <p class="text-green-700">This document has been verified on the blockchain and is
+                                authentic.</p></div>
+                    </div>
+                    <div class="mb-6"><h4 class="font-medium text-gray-800 mb-3">Document Information</h4>
+                        <div class="bg-gray-50 rounded-lg p-4 space-y-3">
+                            <div class="flex justify-between border-b border-gray-200 pb-2"><span
+                                    class="text-gray-600">Document Name:</span> <span class="font-medium">Deed of Sale - Lupa</span>
+                            </div>
+                            <div class="flex justify-between border-b border-gray-200 pb-2"><span
+                                    class="text-gray-600">Document Hash:</span> <span
+                                    class="font-medium text-xs sm:text-sm font-mono">8f4e6b9a2c3d7e1f0a5b8c2d9e7f3a1b4c6d8e2f</span>
+                            </div>
+                            <div class="flex justify-between border-b border-gray-200 pb-2"><span
+                                    class="text-gray-600">Timestamp:</span> <span class="font-medium">June 10, 2025 - 14:35:22 PHT</span>
+                            </div>
+                            <div class="flex justify-between border-b border-gray-200 pb-2"><span
+                                    class="text-gray-600">Blockchain:</span> <span
+                                    class="font-medium">Ethereum</span></div>
+                            <div class="flex justify-between pb-2"><span
+                                    class="text-gray-600">Transaction ID:</span>
+                                <div class="flex items-center"><span
+                                        class="font-medium text-xs sm:text-sm font-mono truncate max-w-[150px] sm:max-w-[250px]">0x7b9c4d5e8f2a1b3c6d5e8f2a1b3c6d5e8f2a1b3c</span>
+                                    <button class="ml-2 text-primary-600 hover:text-primary-800 transition"><span
+                                            class="material-symbols-outlined text-sm">content_copy</span></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-6"><h4 class="font-medium text-gray-800 mb-3">Verification History</h4>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <ul class="space-y-4">
+                                <li class="flex items-start">
+                                    <div class="mr-3 bg-primary-100 text-primary-700 rounded-full p-1 mt-1"><span
+                                            class="material-symbols-outlined text-sm">verified_user</span></div>
+                                    <div>
+                                        <div class="flex items-center"><span
+                                                class="font-medium">Initial Verification</span>
+                                            <span class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Success</span>
+                                        </div>
+                                        <p class="text-gray-600 text-sm">June 10, 2025 - 14:35:22 PHT</p></div>
+                                </li>
+                                <li class="flex items-start">
+                                    <div class="mr-3 bg-primary-100 text-primary-700 rounded-full p-1 mt-1"><span
+                                            class="material-symbols-outlined text-sm">verified_user</span></div>
+                                    <div>
+                                        <div class="flex items-center"><span
+                                                class="font-medium">Notary Validation</span> <span
+                                                class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Success</span>
+                                        </div>
+                                        <p class="text-gray-600 text-sm">June 10, 2025 - 15:42:08 PHT</p></div>
+                                </li>
+                                <li class="flex items-start">
+                                    <div class="mr-3 bg-primary-100 text-primary-700 rounded-full p-1 mt-1"><span
+                                            class="material-symbols-outlined text-sm">verified_user</span></div>
+                                    <div>
+                                        <div class="flex items-center"><span
+                                                class="font-medium">Last Verification</span> <span
+                                                class="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">Success</span>
+                                        </div>
+                                        <p class="text-gray-600 text-sm">June 14, 2025 - 10:28:45 PHT</p></div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-6"><h4
+                            class="font-medium text-gray-800 mb-2 flex items-center"><span
+                            class="material-symbols-outlined text-primary-600 mr-2">info</span> What does this mean?
+                    </h4>
+                        <p class="text-gray-700 text-sm mb-2"> This document has been cryptographically sealed and
+                            recorded on the blockchain, creating a permanent, tamper-proof record of its existence
+                            and contents at the time of notarization. </p>
+                        <p class="text-gray-700 text-sm"> The verification process confirms that the document has
+                            not been altered since it was notarized, providing the highest level of authenticity
+                            assurance. </p></div>
+                    <div class="flex justify-between mt-6">
+                        <button class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg transition flex items-center">
+                            Close
+                        </button>
+                        <div class="flex space-x-2">
+                            <button class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition flex items-center">
+                                <span class="material-symbols-outlined mr-2">download</span> Download Certificate
+                            </button>
+                            <button class="bg-primary-100 hover:bg-primary-200 text-primary-700 px-4 py-2 rounded-lg transition flex items-center">
+                                <span class="material-symbols-outlined mr-2">share</span> Share
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    -->
+</div>

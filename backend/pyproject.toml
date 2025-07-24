@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi (>=0.116.1,<0.117.0)",
-    "uvicorn (>=0.35.0,<0.36.0)"
+    "uvicorn (>=0.35.0,<0.36.0)",
 ]
 
 
@@ -22,3 +22,6 @@ black = "^25.1.0"
 isort = "^6.0.1"
 pytest = "^8.4.1"
 
+[tool.poetry.dependencies]
+sqlmodel = "^0.0.16"
+asyncpg = "^0.29.0"

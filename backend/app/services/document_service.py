@@ -66,5 +66,7 @@ async def create_document():
     pass  # TODO: create functionality
 
 
-async def update_document_status(doc_id, status):
+async def update_document_status(
+    doc_id, status: DocumentStatus = DocumentStatus.PENDING
+):
     pass  # TODO: create functionality

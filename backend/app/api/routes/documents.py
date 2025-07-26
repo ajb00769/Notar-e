@@ -11,9 +11,13 @@ from app.schemas.document import (
     DocumentStatusUpdateRequest,
 )
 from app.services.document_service import (
-    update_document_status,
     create_document_entry,
     list_documents,
+    get_document_with_signing_status,
+    update_document_status,
+    sign_document,
+    request_signatures,
+    check_document_completion,
 )
 from app.services.storage_service import upload_to_s3
 from app.core.auth import get_current_user
@@ -88,28 +92,7 @@ async def update_status(
     status_update: DocumentStatusUpdateRequest = Body(...),
     session: AsyncSession = Depends(get_session),
 ):
-    try:
-        doc = await session.get(DocumentModel, doc_id)
-        if not doc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-            )
-
-        doc.status = status_update.status
-        session.add(doc)
-        await session.commit()
-        await session.refresh(doc)
-
-        return Document.model_validate(doc)
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update document status: {str(e)}",
-        )
+    return await update_document_status(doc_id, status_update.status, session)
 
 
 @router.post(
@@ -117,100 +100,31 @@ async def update_status(
     response_model=DocumentSignResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def sign_document(
+async def sign_document_endpoint(
     doc_id: int,
     sign_request: DocumentSignRequest = Body(...),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    try:
-        doc = await session.get(DocumentModel, doc_id)
-        if not doc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-            )
-
-        # Validate that the role is a valid signing role
-        if sign_request.role not in SigningRole:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid signing role. Must be one of: {[role.value for role in SigningRole]}",
-            )
-
-        # Check if this role has already signed
-        existing_signatures = doc.signatures or {}
-        if sign_request.role.value in existing_signatures:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Document has already been signed by {sign_request.role.value}",
-            )
-
-        # Initialize signatures dict if it doesn't exist
-        if doc.signatures is None:
-            doc.signatures = {}
-
-        # Store signature by role
-        doc.signatures[sign_request.role.value] = sign_request.signature
-        session.add(doc)
-        await session.commit()
-        await session.refresh(doc)
-
-        return DocumentSignResponse(
-            message=f"Signature from {sign_request.role.value} added successfully",
-            document_id=doc_id,
-            signed_by_role=sign_request.role,
-        )
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sign document: {str(e)}",
-        )
+    return await sign_document(doc_id, sign_request, user.user_id, session)
 
 
 @router.get("/{doc_id}", response_model=DocumentWithSigningStatus)
 async def get_document_with_signers(
     doc_id: int, session: AsyncSession = Depends(get_session)
 ):
-    try:
-        doc = await session.get(DocumentModel, doc_id)
-        if not doc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
-            )
+    return await get_document_with_signing_status(doc_id, session)
 
-        # Get all possible signing roles
-        all_roles = [role for role in SigningRole]
-        existing_signatures = doc.signatures or {}
 
-        # Convert existing signature keys to SigningRole enums
-        signed_by = []
-        for role_str in existing_signatures.keys():
-            try:
-                signed_by.append(SigningRole(role_str))
-            except ValueError:
-                # Handle legacy role strings that might not match enum
-                continue
+@router.post("/{doc_id}/request-signatures")
+async def request_document_signatures(
+    doc_id: int, session: AsyncSession = Depends(get_session)
+):
+    return await request_signatures(doc_id, session)
 
-        # Find unsigned roles
-        unsigned_by = [role for role in all_roles if role not in signed_by]
 
-        # Convert document model to schema using model_validate instead of from_orm
-        document_data = Document.model_validate(doc)
-
-        return DocumentWithSigningStatus(
-            **document_data.model_dump(),
-            signed_by=signed_by,
-            unsigned_by=unsigned_by,
-        )
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve document: {str(e)}",
-        )
+@router.get("/{doc_id}/completion-status")
+async def get_document_completion_status(
+    doc_id: int, session: AsyncSession = Depends(get_session)
+):
+    return await check_document_completion(doc_id, session)

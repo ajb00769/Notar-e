@@ -13,7 +13,7 @@ def decode_token(token: str) -> User:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return User(user_id=payload["sub"], email=payload["email"])
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
     return decode_token(token)

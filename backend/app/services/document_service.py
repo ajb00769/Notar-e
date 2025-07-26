@@ -51,3 +51,15 @@ async def create_document_entry(
 async def list_documents(session: AsyncSession):
     docs = await session.exec(select(DocumentModel))
     return docs.all()
+
+
+def get_documents():
+    return None
+
+
+def create_document():
+    return None
+
+
+def update_document_status():
+    return None

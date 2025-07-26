@@ -1,10 +1,12 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from app.enums.appointment_status import AppointmentStatus
+from app.enums.document_types import DocumentType
 
 class Appointment(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: str
-    doc_type: str
-    scheduled_at: datetime
-    status: str = "Pending"
+    id: Optional[int] = Field(default=None, primary_key=True) # optional and None for object creation/new write
+    user_id: str = Field(nullable=False, foreign_key="user.id")
+    doc_type: DocumentType
+    scheduled_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    status: AppointmentStatus = AppointmentStatus.PENDING

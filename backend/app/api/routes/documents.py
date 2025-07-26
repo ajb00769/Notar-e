@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
-from app.schemas.document import Document, DocumentCreate, DocumentStatus
+from app.schemas.document import Document as DocumentModel, DocumentCreate, DocumentWithSigningStatus
+from app.enums.document_status import DocumentStatus
 from app.services.document_service import get_documents, create_document, update_document_status
 from fastapi import APIRouter, UploadFile, File, Form, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession

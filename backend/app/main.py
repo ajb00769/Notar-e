@@ -1,12 +1,19 @@
 from fastapi import FastAPI
 from app.api.routes import documents, appointments
 from app.core.db import init_db
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Notar-e API", version="1.0.0")
 
-@app.on_event("startup")
-async def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     await init_db()
+    yield
+
+
+app = FastAPI(
+    title="Notar-e API", version="1.0.0", lifespan=lifespan
+)  # warning: ignore
+
 
 app.include_router(documents.router, prefix="/documents", tags=["Documents"])
 app.include_router(appointments.router, prefix="/appointments", tags=["Appointments"])

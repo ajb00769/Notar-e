@@ -6,13 +6,16 @@ from app.services.appointment_service import create_appointment, list_appointmen
 
 router = APIRouter()
 
-def get_session():
+
+async def get_session():
     async with async_session() as session:
         yield session
+
 
 @router.post("/", response_model=AppointmentRead)
 async def book(data: AppointmentCreate, session: AsyncSession = Depends(get_session)):
     return await create_appointment(data, session)
+
 
 @router.get("/", response_model=list[AppointmentRead])
 async def list_all(session: AsyncSession = Depends(get_session)):

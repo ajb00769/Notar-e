@@ -2,9 +2,11 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.core.config import DATABASE_URL
+from app.models.user import User  # required for foreign key relationships
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
 
 async def init_db():
     async with engine.begin() as conn:

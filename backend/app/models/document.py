@@ -6,6 +6,7 @@ from datetime import date
 from app.enums.document_status import DocumentStatus
 from app.enums.document_types import DocumentType
 
+
 class Document(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -15,4 +16,4 @@ class Document(SQLModel, table=True):
     upload_date: date
     blob_uri: str
     document_hash: str
-    signatures: Optional[dict] = Field(default_factory=dict, sa_column=Field(sa_column=Column(JSONB)))
+    signatures: Optional[dict] = Field(default_factory=dict, sa_column=Column(JSONB))

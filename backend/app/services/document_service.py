@@ -10,6 +10,7 @@ from app.schemas.document import (
 )
 from app.enums.document_status import DocumentStatus
 from app.enums.signing_roles import SigningRole
+from app.enums.user_roles import UserRole
 from app.services.storage_service import generate_presigned_get_url
 from app.core.hashing import generate_sha256_hash
 from app.services.blockchain_service import notarize_document
@@ -68,11 +69,40 @@ async def create_document_entry(
         )
 
 
-async def list_documents(session: AsyncSession) -> List[Document]:
-    """List all documents."""
+async def list_documents(
+    session: AsyncSession, user_id: str, user_role: UserRole
+) -> List[Document]:
+    """List documents based on user role and participation."""
     try:
-        docs = await session.exec(select(DocumentModel))
-        return [Document.model_validate(doc) for doc in docs.all()]
+        # Admins and superadmins can see all documents
+        if user_role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+            docs = await session.exec(select(DocumentModel))
+            return [Document.model_validate(doc) for doc in docs.all()]
+        # Other users: only documents they own or participate in
+        else:
+            # Documents where user is the owner
+            owner_stmt = select(DocumentModel).where(
+                DocumentModel.uploaded_by == user_id
+            )
+            owner_docs = await session.exec(owner_stmt)
+            owner_docs_list = owner_docs.all()
+
+            # Documents where user is a participant (signed or needs to sign)
+            # Assuming signatures is a dict with user_id in the value
+            participant_stmt = select(DocumentModel)
+            participant_docs = await session.exec(participant_stmt)
+            participant_docs_list = [
+                doc
+                for doc in participant_docs.all()
+                if doc.signatures
+                and any(
+                    sig.get("user_id") == user_id for sig in doc.signatures.values()
+                )
+            ]
+
+            # Combine and deduplicate
+            all_docs = {doc.id: doc for doc in owner_docs_list + participant_docs_list}
+            return [Document.model_validate(doc) for doc in all_docs.values()]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

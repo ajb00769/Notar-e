@@ -3,6 +3,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.appointment import Appointment
 from app.schemas.appointment import AppointmentCreate, AppointmentRead
 from app.enums.appointment_status import AppointmentStatus
+from app.enums.user_roles import UserRole
 from fastapi import HTTPException, status
 from typing import List, Optional
 
@@ -52,21 +53,32 @@ async def get_appointment_by_id(
 
 
 async def update_appointment_status(
-    appointment_id: int, new_status: AppointmentStatus, session: AsyncSession
+    appointment_id: int,
+    new_status: AppointmentStatus,
+    user_id: int,
+    user_role: UserRole,
+    session: AsyncSession,
 ) -> AppointmentRead:
-    """Update appointment status."""
+    """Update appointment status (restricted to owner or privileged roles)."""
     try:
         appointment = await get_appointment_by_id(appointment_id, session)
         if not appointment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
             )
-
+        # Restrict to owner or privileged roles
+        if not (
+            appointment.user_id == user_id
+            or user_role in (UserRole.ADMIN, UserRole.SUPER_ADMIN)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this appointment.",
+            )
         appointment.status = new_status
         session.add(appointment)
         await session.commit()
         await session.refresh(appointment)
-
         return AppointmentRead.model_validate(appointment)
     except HTTPException:
         raise
@@ -79,20 +91,20 @@ async def update_appointment_status(
 
 
 async def cancel_appointment(
-    appointment_id: int, session: AsyncSession
+    appointment_id: int, user_id: int, user_role: UserRole, session: AsyncSession
 ) -> AppointmentRead:
-    """Cancel an appointment."""
+    """Cancel an appointment (restricted to owner or privileged roles)."""
     return await update_appointment_status(
-        appointment_id, AppointmentStatus.CANCELLED, session
+        appointment_id, AppointmentStatus.CANCELLED, user_id, user_role, session
     )
 
 
 async def complete_appointment(
-    appointment_id: int, session: AsyncSession
+    appointment_id: int, user_id: int, user_role: UserRole, session: AsyncSession
 ) -> AppointmentRead:
-    """Mark an appointment as completed."""
+    """Mark an appointment as completed (restricted to owner or privileged roles)."""
     return await update_appointment_status(
-        appointment_id, AppointmentStatus.COMPLETED, session
+        appointment_id, AppointmentStatus.COMPLETED, user_id, user_role, session
     )
 
 

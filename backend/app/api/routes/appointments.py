@@ -12,6 +12,7 @@ from app.services.appointment_service import (
     get_user_appointments,
 )
 from app.enums.appointment_status import AppointmentStatus
+from app.enums.user_roles import UserRole
 from app.core.auth import get_current_user
 from app.schemas.user import User
 from typing import List
@@ -30,7 +31,12 @@ async def book(data: AppointmentCreate, session: AsyncSession = Depends(get_sess
 
 
 @router.get("/", response_model=List[AppointmentRead])
-async def list_all(session: AsyncSession = Depends(get_session)):
+async def list_all(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if current_user.user_role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=403, detail="Not authorized")
     return await list_appointments(session)
 
 
@@ -50,19 +56,38 @@ async def get_appointment(
 async def update_status(
     appointment_id: int,
     new_status: AppointmentStatus,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    return await update_appointment_status(appointment_id, new_status, session)
+    return await update_appointment_status(
+        appointment_id,
+        new_status,
+        int(current_user.user_id),
+        current_user.user_role,
+        session,
+    )
 
 
 @router.patch("/{appointment_id}/cancel", response_model=AppointmentRead)
-async def cancel(appointment_id: int, session: AsyncSession = Depends(get_session)):
-    return await cancel_appointment(appointment_id, session)
+async def cancel(
+    appointment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await cancel_appointment(
+        appointment_id, int(current_user.user_id), current_user.user_role, session
+    )
 
 
 @router.patch("/{appointment_id}/complete", response_model=AppointmentRead)
-async def complete(appointment_id: int, session: AsyncSession = Depends(get_session)):
-    return await complete_appointment(appointment_id, session)
+async def complete(
+    appointment_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await complete_appointment(
+        appointment_id, int(current_user.user_id), current_user.user_role, session
+    )
 
 
 @router.get("/user/{user_id}", response_model=List[AppointmentRead])

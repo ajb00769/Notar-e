@@ -10,7 +10,7 @@ class DocumentCreate(BaseModel):
     name: str
     date: date
     doc_type: DocumentType
-    uploaded_by: str  # user ID or email
+    uploaded_by: int  # user ID
 
 
 class Document(DocumentCreate):

@@ -8,6 +8,7 @@ from app.schemas.document import (
     DocumentSignRequest,
     DocumentSignResponse,
 )
+from app.schemas.signature import SignatureEntry
 from app.enums.document_status import DocumentStatus
 from app.enums.signing_roles import SigningRole
 from app.enums.user_roles import UserRole
@@ -26,6 +27,8 @@ async def create_document_entry(
     session: AsyncSession,
 ) -> Document:
     """Create a new document entry with blockchain notarization."""
+    from app.services.storage_service import delete_from_s3
+
     try:
         # Fetch the file for hashing via signed URL
         url = generate_presigned_get_url(s3_key)
@@ -63,6 +66,11 @@ async def create_document_entry(
         return Document.model_validate(db_doc)
     except Exception as e:
         await session.rollback()
+        # Clean up S3 file if it was uploaded but DB failed
+        try:
+            delete_from_s3(s3_key)
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create document: {str(e)}",
@@ -70,13 +78,17 @@ async def create_document_entry(
 
 
 async def list_documents(
-    session: AsyncSession, user_id: str, user_role: UserRole
+    session: AsyncSession,
+    user_id: int,
+    user_role: UserRole,
+    limit: int = 20,
+    offset: int = 0,
 ) -> List[Document]:
-    """List documents based on user role and participation."""
+    """List documents based on user role and participation, with pagination."""
     try:
         # Admins and superadmins can see all documents
         if user_role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
-            docs = await session.exec(select(DocumentModel))
+            docs = await session.exec(select(DocumentModel).limit(limit).offset(offset))
             return [Document.model_validate(doc) for doc in docs.all()]
         # Other users: only documents they own or participate in
         else:
@@ -102,7 +114,9 @@ async def list_documents(
 
             # Combine and deduplicate
             all_docs = {doc.id: doc for doc in owner_docs_list + participant_docs_list}
-            return [Document.model_validate(doc) for doc in all_docs.values()]
+            # Apply pagination to the combined results
+            paginated_docs = list(all_docs.values())[offset : offset + limit]
+            return [Document.model_validate(doc) for doc in paginated_docs]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -196,7 +210,7 @@ async def update_document_status(
 
 
 async def sign_document(
-    doc_id: int, sign_request: DocumentSignRequest, user_id: str, session: AsyncSession
+    doc_id: int, sign_request: DocumentSignRequest, user_id: int, session: AsyncSession
 ) -> DocumentSignResponse:
     """Sign a document with the specified role."""
     try:
@@ -226,11 +240,11 @@ async def sign_document(
             doc.signatures = {}
 
         # Store signature by role with audit trail
-        doc.signatures[sign_request.role.value] = {
-            "signature": sign_request.signature,
-            "user_id": user_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        doc.signatures[sign_request.role.value] = SignatureEntry(
+            signature=sign_request.signature,
+            user_id=user_id,
+            timestamp=datetime.now(timezone.utc),
+        )
 
         session.add(doc)
         await session.commit()

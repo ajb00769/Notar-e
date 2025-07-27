@@ -5,22 +5,9 @@ from typing import Optional, Dict
 from datetime import date
 from app.enums.document_status import DocumentStatus
 from app.enums.document_types import DocumentType
-from pydantic import BaseModel, validator
-from datetime import datetime
-
-
-class SignatureEntry(BaseModel):
-    user_id: int
-    signature: str
-    timestamp: datetime  # ISO8601 string, enforced by Pydantic
-
-
-# Signatures is a mapping from role (as string, e.g. "notary") to SignatureEntry
-# Example:
-# signatures = {
-#     "notary": {"user_id": 123, "signature": "base64...", "timestamp": "2024-06-01T12:34:56Z"},
-#     "affiant": {"user_id": 456, "signature": "base64...", "timestamp": "2024-06-01T12:35:56Z"}
-# }
+from pydantic import field_validator
+from app.schemas.signature import SignatureEntry
+from app.enums.signing_roles import SigningRole
 
 
 class Document(SQLModel, table=True):
@@ -42,7 +29,7 @@ class Document(SQLModel, table=True):
         default_factory=dict, sa_column=Column(JSONB)
     )
 
-    @validator("signatures", pre=True, always=True)
+    @field_validator("signatures")
     def validate_signatures(cls, v):
         if v is None:
             return {}
@@ -50,9 +37,18 @@ class Document(SQLModel, table=True):
             raise ValueError(
                 "signatures must be a dict mapping role to signature entry"
             )
+        seen_roles = set()
+        allowed_roles = set(role.value for role in SigningRole)
         for role, entry in v.items():
             if not isinstance(role, str):
                 raise ValueError("signature role keys must be strings")
+            if role not in allowed_roles:
+                raise ValueError(f"'{role}' is not an allowed signing role")
+            if role in seen_roles:
+                raise ValueError(
+                    f"Duplicate signature for role '{role}' is not allowed"
+                )
+            seen_roles.add(role)
             if not isinstance(entry, dict):
                 raise ValueError("signature entry must be a dict")
             # Validate required keys

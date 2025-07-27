@@ -13,7 +13,7 @@ async def send_to_blockchain(payload: dict):
 
 
 async def notarize_document(
-    document_hash: str, blob_uri: str, doc_type: DocumentType, user_id: str
+    document_hash: str, blob_uri: str, doc_type: DocumentType, user_id: int
 ):
     payload = {
         "document_hash": document_hash,

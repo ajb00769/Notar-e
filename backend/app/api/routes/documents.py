@@ -1,7 +1,4 @@
 from app.enums.document_types import DocumentType
-from app.enums.document_status import DocumentStatus
-from app.enums.signing_roles import SigningRole
-from app.models.document import Document as DocumentModel
 from app.schemas.document import (
     Document,
     DocumentCreate,
@@ -47,8 +44,15 @@ async def get_session():
 
 
 @router.get("/", response_model=List[Document])
-async def get_documents(session: AsyncSession = Depends(get_session)):
-    return await list_documents(session)
+async def get_documents(
+    limit: int = 20,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await list_documents(
+        session, current_user.user_id, current_user.user_role, limit, offset
+    )
 
 
 @router.post("/", response_model=Document, status_code=status.HTTP_201_CREATED)

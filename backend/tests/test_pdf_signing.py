@@ -14,7 +14,7 @@ def sample_signatures():
             "timestamp": "2024-01-01T12:00:00Z",
         },
         {
-            "role": "client",
+            "role": "affiant",
             "user_id": 2,
             "signature": "sig2",
             "timestamp": "2024-01-01T12:05:00Z",
@@ -51,8 +51,7 @@ def test_embed_signatures_in_pdf(blank_pdf_bytes, sample_signatures):
     assert isinstance(signed_pdf_bytes, bytes)
     reader = PdfReader(io.BytesIO(signed_pdf_bytes))
     assert len(reader.pages) == 1
-    # Optionally, check that the PDF content has changed (overlay applied)
-    # This is a basic check: the content stream should be longer
-    original_len = len(blank_pdf_bytes)
-    signed_len = len(signed_pdf_bytes)
-    assert signed_len > original_len
+    text = reader.pages[0].extract_text()
+    assert "Signed by" in text
+    assert "Signed by notary" in text
+    assert "Signed by affiant" in text

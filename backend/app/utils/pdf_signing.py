@@ -1,4 +1,5 @@
 import io
+import copy
 from typing import List, Dict
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
@@ -33,9 +34,10 @@ def embed_signatures_in_pdf(original_pdf_bytes: bytes, signatures: List[Dict]) -
     page_height = float(first_page.mediabox.height)
     overlay_pdf = create_signature_overlay(signatures, page_width, page_height)
     overlay_page = overlay_pdf.pages[0]
-    # Merge overlay onto first page
-    first_page.merge_page(overlay_page)
-    writer.add_page(first_page)
+    # Deep copy the first page before merging
+    merged_page = copy.deepcopy(first_page)
+    merged_page.merge_page(overlay_page)
+    writer.add_page(merged_page)
     # Add remaining pages unchanged
     for page in reader.pages[1:]:
         writer.add_page(page)

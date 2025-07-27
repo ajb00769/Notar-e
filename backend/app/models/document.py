@@ -1,4 +1,4 @@
-import pydantic
+from pydantic import ValidationError
 from sqlmodel import SQLModel, Field
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -43,15 +43,13 @@ class Document(SQLModel, table=True):
         if v is None:
             return {}
         if not isinstance(v, dict):
-            raise ValueError(
-                "signatures must be a dict mapping role to signature entry"
-            )
+            raise TypeError("signatures must be a dict mapping role to signature entry")
 
         seen_roles = set()
         allowed_roles = set(role.value for role in SigningRole)
         for role, entry in v.items():
             if not isinstance(role, str):
-                raise ValueError("signature role keys must be strings")
+                raise TypeError("signature role keys must be strings")
             if role not in allowed_roles:
                 raise ValueError(f"'{role}' is not an allowed signing role")
             if role in seen_roles:
@@ -60,8 +58,7 @@ class Document(SQLModel, table=True):
                 )
             seen_roles.add(role)
             if not isinstance(entry, dict):
-                raise ValueError("signature entry must be a dict")
-            # Validate required keys
+                raise TypeError("signature entry must be a dict")
             for key in ("user_id", "signature", "timestamp"):
                 if key not in entry:
                     raise ValueError(
@@ -75,28 +72,26 @@ class Document(SQLModel, table=True):
         if v is None:
             return self
         if not isinstance(v, dict):
-            raise pydantic.ValidationError(
+            raise ValidationError(
                 "signatures must be a dict mapping role to signature entry"
             )
         seen_roles = set()
         allowed_roles = set(role.value for role in SigningRole)
         for role, entry in v.items():
             if not isinstance(role, str):
-                raise pydantic.ValidationError("signature role keys must be strings")
+                raise ValidationError("signature role keys must be strings")
             if role not in allowed_roles:
-                raise pydantic.ValidationError(
-                    f"'{role}' is not an allowed signing role"
-                )
+                raise ValidationError(f"'{role}' is not an allowed signing role")
             if role in seen_roles:
-                raise pydantic.ValidationError(
+                raise ValidationError(
                     f"Duplicate signature for role '{role}' is not allowed"
                 )
             seen_roles.add(role)
             if not isinstance(entry, dict):
-                raise pydantic.ValidationError("signature entry must be a dict")
+                raise ValidationError("signature entry must be a dict")
             for key in ("user_id", "signature", "timestamp"):
                 if key not in entry:
-                    raise ValueError(
+                    raise ValidationError(
                         f"signature entry for role '{role}' missing key: {key}"
                     )
         return self

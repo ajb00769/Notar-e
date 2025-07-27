@@ -1,9 +1,12 @@
+from datetime import datetime
+
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.services import document_service
 from app.enums.document_types import DocumentType
 from app.enums.document_status import DocumentStatus
 from app.enums.signing_roles import SigningRole
+from app.schemas.signature import SignatureEntry
 
 
 @pytest.mark.asyncio
@@ -41,7 +44,7 @@ async def test_create_document_entry_success(mock_delete, mock_presign, mock_upl
         instance.document_hash = "abc123"
         instance.signed_blob_uri = None
         instance.signed_document_hash = None
-        session.add = AsyncMock()
+        session.add = MagicMock()
         session.commit = AsyncMock()
         session.refresh = AsyncMock()
         result = await document_service.create_document_entry(doc_data, s3_key, session)
@@ -66,7 +69,7 @@ async def test_create_document_entry_cleanup_on_error(mock_delete):
     doc_data.signed_document_hash = None
     doc_data.document_hash = "abc123"
     s3_key = "test-key"
-    session = MagicMock()
+    session = AsyncMock()
     with patch(
         "app.services.document_service.DocumentModel", side_effect=Exception("fail")
     ):
@@ -76,64 +79,163 @@ async def test_create_document_entry_cleanup_on_error(mock_delete):
 
 
 @pytest.mark.asyncio
-@patch("app.services.document_service.get_document_with_signing_status")
-async def test_check_document_completion_affidavit(mock_get_status):
+@patch("app.services.document_service.update_document_status")
+@patch("app.services.document_service.get_document_by_id")
+async def test_check_document_completion_affidavit(mock_get_doc, mock_update_status):
     # Simulate a document with all required signatures for affidavit
     class DummyDoc:
+        id = 1
+        name = "TestDoc"
         doc_type = DocumentType.AFFIDAVIT
         status = DocumentStatus.PENDING
-        signed_by = [
-            SigningRole.AFFIANT,
-            SigningRole.NOTARY,
-            SigningRole.WITNESS,
-            SigningRole.GRANTOR,
-            # Simulate two witnesses as witness_1 and witness_2
-        ]
+        uploaded_by = 1
+        upload_date = "2024-01-01"
+        blob_uri = "s3://bucket/key"
+        document_hash = "abc123"
+        signed_blob_uri = None
+        signed_document_hash = None
+        signatures = {
+            "affiant": SignatureEntry(
+                user_id=1, signature="abc123", timestamp=datetime.now()
+            ),
+            "notary": SignatureEntry(
+                user_id=2, signature="def456", timestamp=datetime.now()
+            ),
+            "grantor": SignatureEntry(
+                user_id=3, signature="ghi789", timestamp=datetime.now()
+            ),
+            "witness_1": SignatureEntry(
+                user_id=4, signature="jkl000", timestamp=datetime.now()
+            ),
+            "witness_2": SignatureEntry(
+                user_id=5, signature="mno999", timestamp=datetime.now()
+            ),
+        }
 
-    dummy = DummyDoc()
-    dummy.signed_by = [
-        SigningRole.AFFIANT,
-        SigningRole.NOTARY,
-        SigningRole.GRANTOR,
-        # witness_1 and witness_2 as string values
-    ]
-    # Add both witnesses as string keys
-    dummy.signed_by.extend(
-        [
-            type("Enum", (), {"value": "witness_1"})(),
-            type("Enum", (), {"value": "witness_2"})(),
-        ]
-    )
-    mock_get_status = AsyncMock()
-    mock_get_status.return_value = dummy
+    mock_get_doc.return_value = DummyDoc()
+    mock_update_status.return_value = AsyncMock()
+
     session = AsyncMock()
     result = await document_service.check_document_completion(1, session)
+
     assert result["is_complete"] is True
     assert result["missing_signatures"] == []
+    # Verify that update_document_status was called since all signatures are present
+    mock_update_status.assert_called_once_with(1, DocumentStatus.COMPLETED, session)
 
 
 @pytest.mark.asyncio
-@patch("app.services.document_service.get_document_with_signing_status")
-async def test_check_document_completion_deed_missing_grantee(mock_get_status):
+@patch("app.services.document_service.get_document_by_id")
+async def test_check_document_completion_deed_missing_grantee(mock_get_doc):
     # Simulate a document with all but grantee signed for a deed
     class DummyDoc:
+        id = 2
+        name = "TestDeed"
         doc_type = DocumentType.DEED
         status = DocumentStatus.PENDING
-        signed_by = [
-            SigningRole.NOTARY,
-            SigningRole.GRANTOR,
-            # witness_1 and witness_2 as string values
-        ]
+        uploaded_by = 1
+        upload_date = "2024-01-01"
+        blob_uri = "s3://bucket/key"
+        document_hash = "abc123"
+        signed_blob_uri = None
+        signed_document_hash = None
+        signatures = {
+            "notary": SignatureEntry(
+                user_id=1, signature="abc123", timestamp=datetime.now()
+            ),
+            "grantor": SignatureEntry(
+                user_id=2, signature="def456", timestamp=datetime.now()
+            ),
+            "witness_1": SignatureEntry(
+                user_id=3, signature="ghi789", timestamp=datetime.now()
+            ),
+            "witness_2": SignatureEntry(
+                user_id=4, signature="jkl000", timestamp=datetime.now()
+            ),
+        }
 
-    dummy = DummyDoc()
-    dummy.signed_by = [
-        SigningRole.NOTARY,
-        SigningRole.GRANTOR,
-        type("Enum", (), {"value": "witness_1"})(),
-        type("Enum", (), {"value": "witness_2"})(),
-    ]
-    mock_get_status.return_value = dummy
+    mock_get_doc.return_value = DummyDoc()
     session = AsyncMock()
     result = await document_service.check_document_completion(2, session)
     assert result["is_complete"] is False
     assert "grantee" in result["missing_signatures"]
+
+
+@pytest.mark.asyncio
+@patch("app.services.document_service.get_document_by_id")
+async def test_update_document_status_success(mock_get_doc):
+    # Test successful document status update
+    from app.models.document import Document as DocumentModel
+
+    # Create a mock document
+    mock_doc = MagicMock(spec=DocumentModel)
+    mock_doc.id = 1
+    mock_doc.status = DocumentStatus.PENDING
+    mock_get_doc.return_value = mock_doc
+
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.refresh = AsyncMock()
+
+    # Mock the Document.model_validate to return a dict-like object
+    with patch("app.services.document_service.Document") as MockDocument:
+        MockDocument.model_validate.return_value = {
+            "id": 1,
+            "status": DocumentStatus.COMPLETED,
+            "name": "test.pdf",
+            "doc_type": DocumentType.AFFIDAVIT,
+        }
+
+        result = await document_service.update_document_status(
+            1, DocumentStatus.COMPLETED, session
+        )
+
+        # Verify the document status was updated
+        assert mock_doc.status == DocumentStatus.COMPLETED
+        session.add.assert_called_once_with(mock_doc)
+        session.commit.assert_called_once()
+        session.refresh.assert_called_once_with(mock_doc)
+        assert result["id"] == 1
+        assert result["status"] == DocumentStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+@patch("app.services.document_service.get_document_by_id")
+async def test_update_document_status_document_not_found(mock_get_doc):
+    # Test document not found scenario
+    mock_get_doc.return_value = None
+
+    session = AsyncMock()
+
+    with pytest.raises(Exception) as exc_info:
+        await document_service.update_document_status(
+            999, DocumentStatus.COMPLETED, session
+        )
+
+    assert "Document not found" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@patch("app.services.document_service.get_document_by_id")
+async def test_update_document_status_database_error(mock_get_doc):
+    # Test database error handling
+    from app.models.document import Document as DocumentModel
+
+    mock_doc = MagicMock(spec=DocumentModel)
+    mock_doc.id = 1
+    mock_doc.status = DocumentStatus.PENDING
+    mock_get_doc.return_value = mock_doc
+
+    session = AsyncMock()
+    session.add = MagicMock()
+    session.commit = AsyncMock(side_effect=Exception("Database error"))
+    session.rollback = AsyncMock()
+
+    with pytest.raises(Exception) as exc_info:
+        await document_service.update_document_status(
+            1, DocumentStatus.COMPLETED, session
+        )
+
+    assert "Failed to update document status" in str(exc_info.value)
+    session.rollback.assert_called_once()

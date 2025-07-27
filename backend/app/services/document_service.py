@@ -155,21 +155,38 @@ async def get_document_with_signing_status(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
             )
 
-        # Get all possible signing roles
-        all_roles = [role for role in SigningRole]
         existing_signatures = doc.signatures or {}
 
         # Convert existing signature keys to SigningRole enums
+        # Handle special cases for witness_1 and witness_2
         signed_by = []
         for role_str in existing_signatures.keys():
             try:
-                signed_by.append(SigningRole(role_str))
+                if role_str.startswith("witness_"):
+                    # Map witness_1 and witness_2 to WITNESS enum
+                    signed_by.append(SigningRole.WITNESS)
+                else:
+                    signed_by.append(SigningRole(role_str))
             except ValueError:
                 # Handle legacy role strings that might not match enum
                 continue
 
-        # Find unsigned roles
-        unsigned_by = [role for role in all_roles if role not in signed_by]
+        # Get required roles for this document type
+        required_role_strings = get_required_signing_roles(doc.doc_type)
+
+        # Convert required role strings to SigningRole enums for unsigned_by
+        unsigned_by = []
+        signed_role_strings = set(existing_signatures.keys())
+
+        for required_role in required_role_strings:
+            if required_role not in signed_role_strings:
+                try:
+                    if required_role.startswith("witness_"):
+                        unsigned_by.append(SigningRole.WITNESS)
+                    else:
+                        unsigned_by.append(SigningRole(required_role))
+                except ValueError:
+                    continue
 
         # Convert document model to schema
         document_data = Document.model_validate(doc)
@@ -357,15 +374,21 @@ async def request_signatures(doc_id: int, session: AsyncSession) -> dict:
 async def check_document_completion(doc_id: int, session: AsyncSession) -> dict:
     """Check if document has all required signatures and update status accordingly."""
     try:
-        doc_with_status = await get_document_with_signing_status(doc_id, session)
+        # Get the document directly to access the actual signature keys
+        doc = await get_document_by_id(doc_id, session)
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+            )
 
         # Check if all required roles have signed
-        required_roles = get_required_signing_roles(doc_with_status.doc_type)
-        signed_roles = set(role.value for role in doc_with_status.signed_by)
+        required_roles = get_required_signing_roles(doc.doc_type)
+        existing_signatures = doc.signatures or {}
+        signed_roles = set(existing_signatures.keys())
 
         is_complete = required_roles.issubset(signed_roles)
 
-        if is_complete and doc_with_status.status != DocumentStatus.COMPLETED:
+        if is_complete and doc.status != DocumentStatus.COMPLETED:
             # Update document status to completed
             await update_document_status(doc_id, DocumentStatus.COMPLETED, session)
 

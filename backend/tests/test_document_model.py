@@ -38,12 +38,12 @@ def test_signatures_none():
 
 
 def test_signatures_invalid_type():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValueError):
         Document(**base_doc, signatures=[1, 2, 3])
 
 
 def test_signatures_missing_key():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValueError):
         Document(
             **base_doc,
             signatures={
@@ -69,7 +69,7 @@ def test_signatures_duplicate_role():
 
 
 def test_signatures_disallowed_role():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValueError):
         Document(
             **base_doc,
             signatures={

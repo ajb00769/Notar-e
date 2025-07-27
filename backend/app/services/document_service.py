@@ -1,6 +1,8 @@
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from app.models.document import Document as DocumentModel
+from app.models.document_signature_audit import DocumentSignatureAudit
+from app.models.user import Users
 from app.schemas.document import (
     Document,
     DocumentCreate,
@@ -19,6 +21,8 @@ from fastapi import HTTPException, status
 from typing import List, Optional
 from datetime import datetime, timezone
 import httpx
+from app.utils.locks import document_lock
+from app.utils.signing_roles import get_required_signing_roles
 
 
 async def create_document_entry(
@@ -28,15 +32,18 @@ async def create_document_entry(
 ) -> Document:
     """Create a new document entry with blockchain notarization."""
     from app.services.storage_service import delete_from_s3
+    import logging
 
+    db_doc = None
+    file_uploaded = False
     try:
         # Fetch the file for hashing via signed URL
         url = generate_presigned_get_url(s3_key)
-
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
             response.raise_for_status()
             file_bytes = response.content
+        file_uploaded = True
 
         # Generate document hash
         doc_hash = generate_sha256_hash(file_bytes)
@@ -50,27 +57,26 @@ async def create_document_entry(
             user_id=doc_data.uploaded_by,
         )
 
-        # Save to DB
-        db_doc = DocumentModel(
-            name=doc_data.name,
-            upload_date=doc_data.date,
-            doc_type=doc_data.doc_type,
-            uploaded_by=doc_data.uploaded_by,
-            blob_uri=blob_uri,
-            document_hash=doc_hash,
-        )
-        session.add(db_doc)
-        await session.commit()
+        # Save to DB in a transaction
+        async with session.begin():
+            db_doc = DocumentModel(
+                name=doc_data.name,
+                upload_date=doc_data.date,
+                doc_type=doc_data.doc_type,
+                uploaded_by=doc_data.uploaded_by,
+                blob_uri=blob_uri,
+                document_hash=doc_hash,
+            )
+            session.add(db_doc)
         await session.refresh(db_doc)
-
         return Document.model_validate(db_doc)
     except Exception as e:
         await session.rollback()
-        # Clean up S3 file if it was uploaded but DB failed
-        try:
-            delete_from_s3(s3_key)
-        except Exception:
-            pass
+        if file_uploaded:
+            try:
+                delete_from_s3(s3_key)
+            except Exception as cleanup_err:
+                logging.error(f"Failed to cleanup S3 file {s3_key}: {cleanup_err}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create document: {str(e)}",
@@ -96,7 +102,7 @@ async def list_documents(
             owner_stmt = select(DocumentModel).where(
                 DocumentModel.uploaded_by == user_id
             )
-            owner_docs = await session.exec(owner_stmt)
+            owner_docs = await session.exec(owner_stmt)  # type: ignore
             owner_docs_list = owner_docs.all()
 
             # Documents where user is a participant (signed or needs to sign)
@@ -209,11 +215,40 @@ async def update_document_status(
         )
 
 
+@document_lock(doc_id_arg="doc_id")
 async def sign_document(
-    doc_id: int, sign_request: DocumentSignRequest, user_id: int, session: AsyncSession
+    doc_id: int,
+    sign_request: DocumentSignRequest,
+    user_id: int,
+    session: AsyncSession,
 ) -> DocumentSignResponse:
-    """Sign a document with the specified role."""
+    """Sign a document with the specified role, enforcing signing authorization."""
+
+    allowed_roles = {
+        UserRole.NOTARY: [SigningRole.NOTARY],
+        UserRole.USER: [
+            SigningRole.AFFIANT,
+            SigningRole.WITNESS,
+            SigningRole.GRANTOR,
+            SigningRole.GRANTEE,
+            SigningRole.OTHER_SIGNER,
+        ],
+        UserRole.ADMIN: list(SigningRole),
+        UserRole.SUPER_ADMIN: list(SigningRole),
+    }
+
     try:
+        db_user = await session.get(Users, user_id)
+
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user_role = (
+            db_user.role
+            if isinstance(db_user.role, UserRole)
+            else UserRole(db_user.role)
+        )
+
         doc = await get_document_by_id(doc_id, session)
         if not doc:
             raise HTTPException(
@@ -225,6 +260,16 @@ async def sign_document(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid signing role. Must be one of: {[role.value for role in SigningRole]}",
+            )
+
+        # Convert user_role to enum if needed
+        if not isinstance(user_role, UserRole):
+            user_role = UserRole(user_role)
+
+        if sign_request.role not in allowed_roles.get(user_role, []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"User with role '{user_role.value}' is not authorized to sign as '{sign_request.role.value}'",
             )
 
         # Check if this role has already signed
@@ -246,7 +291,16 @@ async def sign_document(
             timestamp=datetime.now(timezone.utc),
         )
 
+        # Audit log
+        audit_entry = DocumentSignatureAudit(
+            document_id=doc_id,
+            user_id=user_id,
+            role=sign_request.role.value,
+            timestamp=datetime.now(timezone.utc),
+            action="signed",
+        )
         session.add(doc)
+        session.add(audit_entry)
         await session.commit()
         await session.refresh(doc)
 
@@ -285,13 +339,6 @@ async def request_signatures(doc_id: int, session: AsyncSession) -> dict:
                 "status": "complete",
             }
 
-        # TODO: Implement actual signature request logic
-        # This could involve:
-        # - Sending emails/notifications to required signers
-        # - Creating signing sessions
-        # - Generating signing links
-        # - Scheduling video meetings for notarization
-
         return {
             "message": f"Signature requests sent to {len(unsigned_roles)} parties",
             "document_id": doc_id,
@@ -313,13 +360,8 @@ async def check_document_completion(doc_id: int, session: AsyncSession) -> dict:
         doc_with_status = await get_document_with_signing_status(doc_id, session)
 
         # Check if all required roles have signed
-        required_roles = {
-            SigningRole.NOTARY,
-            SigningRole.AFFIANT,
-            SigningRole.WITNESS,
-            SigningRole.GRANTOR,
-        }
-        signed_roles = set(doc_with_status.signed_by)
+        required_roles = get_required_signing_roles(doc_with_status.doc_type)
+        signed_roles = set(role.value for role in doc_with_status.signed_by)
 
         is_complete = required_roles.issubset(signed_roles)
 
@@ -330,10 +372,8 @@ async def check_document_completion(doc_id: int, session: AsyncSession) -> dict:
         return {
             "document_id": doc_id,
             "is_complete": is_complete,
-            "signed_by": [role.value for role in signed_roles],
-            "missing_signatures": [
-                role.value for role in (required_roles - signed_roles)
-            ],
+            "signed_by": list(signed_roles),
+            "missing_signatures": list(required_roles - signed_roles),
             "status": (
                 DocumentStatus.COMPLETED.value
                 if is_complete

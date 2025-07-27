@@ -1,6 +1,5 @@
 import boto3
 from botocore.client import Config
-import os
 
 BUCKET = "your-s3-bucket"
 REGION = "us-east-1"

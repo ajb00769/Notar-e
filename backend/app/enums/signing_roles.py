@@ -3,7 +3,7 @@ from enum import Enum
 
 class SigningRole(str, Enum):
     NOTARY = "notary"
-    AFFIANT = "affiant"  # Person making the sworn statement
+    AFFIANT = "affiant"  # Person making the sworn statement for affidavits
     WITNESS = "witness"
     GRANTOR = "grantor"  # Person creating/granting the document (contract creator)
     GRANTEE = "grantee"  # Person receiving rights/benefits from the document

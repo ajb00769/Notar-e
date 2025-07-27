@@ -18,9 +18,11 @@ class Document(DocumentCreate):
     status: DocumentStatus
     blob_uri: HttpUrl
     document_hash: str
+    signed_blob_uri: Optional[HttpUrl] = None  # S3 URI of the signed PDF
+    signed_document_hash: Optional[str] = None  # Hash of the signed PDF
     signatures: Optional[Dict[str, str]] = None
 
-    class Config:
+    class ConfigDict:
         from_attributes = True
 
 

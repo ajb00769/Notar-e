@@ -114,7 +114,7 @@ async def get_user_appointments(
     """Get all appointments for a specific user."""
     try:
         result = await session.exec(
-            select(Appointment).where(Appointment.user_id == user_id)
+            select(Appointment).where(Appointment.user_id == user_id)  # type: ignore
         )
         return [AppointmentRead.model_validate(appt) for appt in result.all()]
     except Exception as e:

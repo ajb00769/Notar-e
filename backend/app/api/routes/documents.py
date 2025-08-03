@@ -1,4 +1,4 @@
-from app.enums.document_types import DocumentType
+from app.models.document import DocumentType
 from app.schemas.document import (
     Document,
     DocumentCreate,
@@ -64,6 +64,11 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    """
+    Uploads and hashes document because it uploads it to the blockchain because it calls
+    the notarize_document function. Case is probably for documents without digital
+    signatures.
+    """
     try:
         contents = await file.read()
         s3_key = f"docs/{uuid4()}_{file.filename}"
@@ -96,6 +101,9 @@ async def update_status(
     status_update: DocumentStatusUpdateRequest = Body(...),
     session: AsyncSession = Depends(get_session),
 ):
+    # NOTE: there is no validation whether the document is owned by the user because
+    #  a document's status can be updated depending on who signs it last. But I think
+    #  there should be visibility checks only when a user is invited to sign
     return await update_document_status(doc_id, status_update.status, session)
 
 

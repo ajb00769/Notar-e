@@ -1,4 +1,4 @@
-from sqlmodel import select
+from sqlmodel import select, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.appointment import Appointment
 from app.schemas.appointment import AppointmentCreate, AppointmentRead
@@ -55,9 +55,9 @@ async def get_appointment_by_id(
 async def update_appointment_status(
     appointment_id: int,
     new_status: AppointmentStatus,
-    user_id: int,
     user_role: UserRole,
     session: AsyncSession,
+    user_id: int = Field(foreign_key="users.id"),
 ) -> AppointmentRead:
     """Update appointment status (restricted to owner or privileged roles)."""
     try:
@@ -95,7 +95,7 @@ async def cancel_appointment(
 ) -> AppointmentRead:
     """Cancel an appointment (restricted to owner or privileged roles)."""
     return await update_appointment_status(
-        appointment_id, AppointmentStatus.CANCELLED, user_id, user_role, session
+        appointment_id, AppointmentStatus.CANCELLED, user_role, session, user_id
     )
 
 
@@ -104,7 +104,7 @@ async def complete_appointment(
 ) -> AppointmentRead:
     """Mark an appointment as completed (restricted to owner or privileged roles)."""
     return await update_appointment_status(
-        appointment_id, AppointmentStatus.COMPLETED, user_id, user_role, session
+        appointment_id, AppointmentStatus.COMPLETED, user_role, session, user_id
     )
 
 

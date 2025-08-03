@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from datetime import datetime
-from app.enums.document_types import DocumentType
+from app.models.document import DocumentType
 from app.enums.appointment_status import AppointmentStatus
+from sqlmodel import Field
 
 
 class AppointmentCreate(BaseModel):
-    user_id: int
+    user_id: int = Field(foreign_key="users.id")
     doc_type: DocumentType
     scheduled_at: datetime
 

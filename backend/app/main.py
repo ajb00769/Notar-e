@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.api.routes import documents, appointments, auth, notifications
+from app.api.routes import documents, appointments, auth, signatures
 from app.core.db import init_db
 from contextlib import asynccontextmanager
 import uvicorn
@@ -21,9 +21,7 @@ app.include_router(documents.router, prefix="/api/documents", tags=["Documents"]
 app.include_router(
     appointments.router, prefix="/api/appointments", tags=["Appointments"]
 )
-app.include_router(
-    notifications.router, prefix="/api/notifications", tags=["Notifications"]
-)
+app.include_router(signatures.router, prefix="/api/signatures", tags=["Signatures"])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

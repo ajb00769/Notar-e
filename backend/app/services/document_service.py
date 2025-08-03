@@ -11,7 +11,7 @@ from app.schemas.document import (
     DocumentSignResponse,
 )
 from app.schemas.signature import SignatureEntry
-from app.enums.document_status import DocumentStatus
+from app.models.document import DocumentStatus, DocumentSignature
 from app.enums.signing_roles import SigningRole
 from app.enums.user_roles import UserRole
 from app.services.storage_service import generate_presigned_get_url
@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 import httpx
 from app.utils.locks import document_lock
 from app.utils.signing_roles import get_required_signing_roles
+from app.services.storage_service import delete_from_s3
+import logging
 
 
 async def create_document_entry(
@@ -31,8 +33,6 @@ async def create_document_entry(
     session: AsyncSession,
 ) -> Document:
     """Create a new document entry with blockchain notarization."""
-    from app.services.storage_service import delete_from_s3
-    import logging
 
     db_doc = None
     file_uploaded = False
@@ -148,6 +148,8 @@ async def get_document_with_signing_status(
     doc_id: int, session: AsyncSession
 ) -> DocumentWithSigningStatus:
     """Get document with signing status information."""
+    # FIXME: Document.signatures is deprecated, please update because signatures are
+    #  now stored in a separate DocumentSignature table
     try:
         doc = await get_document_by_id(doc_id, session)
         if not doc:
@@ -155,10 +157,12 @@ async def get_document_with_signing_status(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
             )
 
-        existing_signatures = doc.signatures or {}
+        existing_signatures = await get_document_with_signatures(doc_id, session)
 
         # Convert existing signature keys to SigningRole enums
         # Handle special cases for witness_1 and witness_2
+        # REVIEW: review logic on the usage of signed_by and unsigned_by, why not get
+        #  the user ids instead of just getting the document roles
         signed_by = []
         for role_str in existing_signatures.keys():
             try:
@@ -258,13 +262,15 @@ async def sign_document(
         db_user = await session.get(Users, user_id)
 
         if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
 
         user_role = (
             db_user.role
             if isinstance(db_user.role, UserRole)
             else UserRole(db_user.role)
-        )
+        )  # REVIEW: Check if this returns a tuple
 
         doc = await get_document_by_id(doc_id, session)
         if not doc:
@@ -287,9 +293,11 @@ async def sign_document(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"User with role '{user_role.value}' is not authorized to sign as '{sign_request.role.value}'",
-            )
+            )  # REVIEW: Check how this iterates over allowed_roles' list
 
         # Check if this role has already signed
+        # FIXME:Document.signatures property is deprecated, new db model separates
+        #  signatures in DocumentSignature table
         existing_signatures = doc.signatures or {}
         if sign_request.role.value in existing_signatures:
             raise HTTPException(
@@ -409,4 +417,18 @@ async def check_document_completion(doc_id: int, session: AsyncSession) -> dict:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to check document completion: {str(e)}",
+        )
+
+
+# REVIEW: Check the returned value's type
+async def get_document_with_signatures(
+    doc_id: int, session: AsyncSession
+) -> List[DocumentSignature]:
+    try:
+        query = select(DocumentSignature).where(DocumentSignature.document_id == doc_id)
+        result = await session.exec(query)  # type: ignore
+        return result
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Document not found."
         )

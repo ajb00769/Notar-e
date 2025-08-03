@@ -1,4 +1,4 @@
-from app.enums.document_types import DocumentType
+from app.models.document import DocumentType
 from app.enums.signing_roles import SigningRole
 from typing import Set
 

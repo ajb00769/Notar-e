@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class SigningRole(str, Enum):
+class SigningRole(StrEnum):
     NOTARY = "notary"
     AFFIANT = "affiant"  # Person making the sworn statement for affidavits
     WITNESS = "witness"

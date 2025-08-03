@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime, timezone
-from app.enums.document_types import DocumentType
+from app.models.document import DocumentType
 
 BLOCKCHAIN_API = "http://localhost:3000/notarize"  # Lisk Express backend
 

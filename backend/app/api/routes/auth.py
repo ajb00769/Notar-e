@@ -19,8 +19,13 @@ def login(username: str = Form(...), email: str = Form(...)):
         user_data = {"sub": username, "email": email}
         expiration = datetime.now(timezone.utc) + timedelta(minutes=EXPIRATION_MINUTES)
         payload = {**user_data, "exp": expiration}
+        refresh_payload = {
+            **user_data,
+            "exp": datetime.now(timezone.utc) + timedelta(days=30),
+        }
         token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-        return Token(access_token=token)
+        refresh = jwt.encode(refresh_payload, SECRET_KEY, algorithm=ALGORITHM)
+        return Token(access_token=token, refresh_token=refresh)
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
